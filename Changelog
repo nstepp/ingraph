@@ -1,0 +1,56 @@
+Ingraph Changelog
+
+---- 0.10 ----
+
+UI improvements.
+	- Portal label readability
+	- file save dialog fix
+Add ability to set the number of optimization
+iterations.
+
+---- 0.9.2 ----
+
+Fix countCoverings function.
+Move gui functions out of where clause so their
+documentation shows up.
+
+---- 0.9.1 ----
+
+Fix two bugs when loading graphs
+- cancel would crash
+- optimize button would start dimmed
+
+---- 0.9 ----
+
+Save and load a graph (portals and links)
+New link defense optimization function
+
+---- 0.8 ----
+
+Add multiple optimization functions
+Add a portal link report
+
+---- 0.5 ----
+
+Search for application icon in serveral places.
+This only works in Linux at the moment.
+
+---- 0.4 ----
+
+Add an application icon.
+
+---- 0.3.1 ----
+
+Add portal rankings.
+Add documentation.
+
+---- 0.2 ----
+
+Add a default portal name
+to portal creation dialog.
+About window.
+
+---- 0.1 ----
+
+Proof of concept
+

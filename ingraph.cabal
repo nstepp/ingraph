@@ -1,0 +1,29 @@
+Name:                ingraph
+Version:             0.10
+Synopsis:            Ingress portal linking optimizer
+Description:         Tool for optimizing portal links in the game Ingress
+License:             GPL-2
+License-file:        LICENSE
+Author:              Nigel Stepp
+Maintainer:          stepp@atistar.net
+Copyright:           2013 Nigel Stepp
+
+Category:            Game
+Build-type:          Simple
+
+Extra-source-files: Changelog, ingraph-icon.png, ingraph-logo.png, doc/*.html, doc/*.css, doc/*.js, doc/*.png, doc/*.gif
+Data-files: ingraph-icon.png
+
+-- Constraint on the version of Cabal needed to build this package.
+Cabal-version:       >=1.6
+
+
+Executable ingraph
+  Main-is:           Main.hs
+  Build-Depends:     base >= 3 && < 5, fgl >= 5, wx >= 0.13 && < 0.14, random >= 1.0, wxcore, 
+                     containers, filepath, directory
+  Other-modules:     InGraph DataDict Paths_ingraph
+
+  if os(windows)
+     ghc-options: -optl-mwindows
+
