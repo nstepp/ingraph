@@ -1,5 +1,5 @@
 Name:                ingraph
-Version:             0.10
+Version:             0.11
 Synopsis:            Ingress portal linking optimizer
 Description:         Tool for optimizing portal links in the game Ingress
 License:             GPL-2
@@ -20,7 +20,7 @@ Cabal-version:       >=1.6
 
 Executable ingraph
   Main-is:           Main.hs
-  Build-Depends:     base >= 3 && < 5, fgl >= 5, wx >= 0.13 && < 0.14, random >= 1.0, wxcore, 
+  Build-Depends:     base, fgl, wx, random, wxcore, 
                      containers, filepath, directory
   Other-modules:     InGraph DataDict Paths_ingraph
 

@@ -213,10 +213,15 @@ makesCross :: PortalGraph
            -> (Node,Node) -- ^ Tuple containing from and to portal ids
            -> Bool
 makesCross g (from,to) =
-    let fromNode = fromJust $ lab g from
-        toNode = fromJust $ lab g to
-        crosses = map (\(a,b)->linksCross (fromNode,toNode) (fromJust $ lab g a, fromJust $ lab g b)) (edges g)
-    in or crosses
+    let fromNodeM = lab g from
+        toNodeM = lab g to
+    in case fromNodeM of
+        Nothing -> error $ "Missing from node " ++ show from ++ " out of " ++ show (labNodes g)
+        Just fromNode -> case toNodeM of
+            Nothing -> error $ "Missing to node " ++ show to ++ " out of " ++ show (labNodes g)
+            Just toNode -> or $ crosses fromNode toNode
+    where
+        crosses fromNode toNode = map (\(a,b)->linksCross (fromNode,toNode) (fromJust $ lab g a, fromJust $ lab g b)) (edges g)
 
 
 -- ** Optimization
@@ -372,7 +377,7 @@ randomField g randgen =
     where
         pickPortals g randgen fields =
             if (length fields) < 3
-            then let (newPortal, randgen2) = randomR (1, noNodes g) randgen
+            then let (newPortal, randgen2) = randomR (0, (noNodes g)-1) randgen
                  in pickPortals g randgen2 (nub (newPortal : fields))
             else fields
 
@@ -381,13 +386,13 @@ randomField g randgen =
 -- If legal, add it to a list of fields in the graph.
 -- If illegal, remove a field and repeat
 perturbGraphFields (randgen,g,fields) =
-    let (p1, randgen2) = randomR (1, noNodes g) randgen
-        (p2, randgen3) = randomR (1, noNodes g) randgen2
-        (p3, randgen4) = randomR (1, noNodes g) randgen3
+    let (p1, randgen2) = randomR (0, (noNodes g) - 1) randgen
+        (p2, randgen3) = randomR (0, (noNodes g) - 1) randgen2
+        (p3, randgen4) = randomR (0, (noNodes g) - 1) randgen3
         newField = randomField g randgen
         fieldLinks = [ (x,y) | x <- newField, y <- newField, x < y ]
     in if ((length fields) > 0) && (or $ map (makesCross g) fieldLinks)
-       then let (f, randgen5) = randomR (1, length fields) randgen4
+       then let (f, randgen5) = randomR (0, (length fields)-1) randgen4
                 newFields = delete (fields!!(f-1)) fields
             in perturbGraphFields (randgen5, graphFromFields g newFields, newFields)
        else let newFields = newField : fields
@@ -411,8 +416,8 @@ graphFromFields g fields =
 perturbGraph :: (StdGen, PortalGraph) -> (StdGen, PortalGraph)
 perturbGraph (randgen,g) = 
     -- Select two random nodes for a link
-    let (randLinkFrom,randgen2) =  randomR (1, noNodes g) randgen
-        (randLinkTo,randgen3) =  randomR (1, noNodes g) randgen2
+    let (randLinkFrom,randgen2) =  randomR (0, (noNodes g)-1) randgen
+        (randLinkTo,randgen3) =  randomR (0, (noNodes g)-1) randgen2
     --- If it's a self-link, try again
     in if randLinkFrom == randLinkTo
        then if (length $ nodes g) < 2

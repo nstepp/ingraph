@@ -23,87 +23,58 @@
     $Id: DataDict.hs 844 2013-06-28 22:55:53Z stepp $
 -}
 
+{-# LANGUAGE TypeFamilies #-}
+
 -- |Data Dictionary module.
 -- The data dictionary allows widgets and controls
 -- to be collected in a single place.
 module DataDict where
 
 import Data.Maybe
+import qualified Data.Map as Map
+import Graphics.UI.WX
+import Graphics.UI.WXCore
 
 -- * Types
 
+data WidgetConfig = WidgetConfig {
+    cfgButtons :: Map.Map ButtonLabel (Button ()),
+    cfgText :: Map.Map TextLabel (StaticText ()),
+    cfgSliders :: Map.Map SliderLabel (Slider ()),
+    cfgSpinners :: Map.Map SpinLabel (SpinCtrl ())
+    }
+
+class ConfigItem a where
+    type Value a :: *
+    getCfg :: WidgetConfig -> a -> Value a
+
+instance ConfigItem ButtonLabel where
+    type Value ButtonLabel = Button ()
+    getCfg cfg key = fromJust $ Map.lookup key $ cfgButtons cfg
+
+instance ConfigItem TextLabel where
+    type Value TextLabel = StaticText ()
+    getCfg cfg key = fromJust $ Map.lookup key $ cfgText cfg
+
+instance ConfigItem SliderLabel where
+    type Value SliderLabel = Slider ()
+    getCfg cfg key = fromJust $ Map.lookup key $ cfgSliders cfg
+
+instance ConfigItem SpinLabel where
+    type Value SpinLabel = SpinCtrl ()
+    getCfg cfg key = fromJust $ Map.lookup key $ cfgSpinners cfg
+
 -- |Available buttons
-data Button = OptButton
-            | ResetButton deriving (Eq,Show)
+data ButtonLabel = OptButton
+            | ResetButton deriving (Eq,Show,Ord)
 -- |Available texts
-data Text = EAPText
+data TextLabel = EAPText
           | FAPText
           | RatioText
           | LinkText
-          | FieldText deriving (Eq,Show)
+          | FieldText deriving (Eq,Show,Ord)
 -- |Available controls
-data Control = GainSlider deriving (Eq,Show)
+data SliderLabel = GainSlider deriving (Eq,Show,Ord)
 -- |Available spin controls
-data Spin = IterationSpin deriving (Eq,Show)
-
--- |A dictionary key
-data DictKey = ButtonKey Button
-             | TextKey Text
-             | ControlKey Control
-             | SpinKey Spin deriving (Eq,Show)
-
--- |An individual dictionary. Multiple dictionaries are
--- collected into the data dictionary.
-data Dict a = Dict [(DictKey,a)] deriving (Show)
-
--- |The data dictionary itself is a collection of buttons, text,
--- and GUI controls.
-data DataDict a b c d =
-    DataDict { buttonDict :: Dict a,
-               textDict :: Dict b,
-               controlDict :: Dict c,
-               spinDict :: Dict d}
-
--- * Functions
-
-emptyDict = Dict []
-
--- |Look up an entry in an individual dictionary
-lookupEntry :: DictKey -> Dict a -> Maybe a
-lookupEntry key (Dict d) =
-    lookup key d
-
--- |Get an entry from an individual dictionary. If the entry
--- doesn't exist, this will throw an exception.
-getEntry :: DictKey -> Dict a -> a
-getEntry key d =
-    fromJust (lookupEntry key d)
-
--- |Add an entry to an individual dictionary. If the entry
--- already exists, nothing happens
-addEntry :: DictKey -> a -> Dict a -> Dict a
-addEntry key val (Dict d) =
-    case (lookup key d) of
-        Nothing -> Dict ((key,val):d)
-        Just v -> Dict d
-
-
--- * Dictionary specific gets
-
--- |Get a button from the data dictionary
-getButton :: Button -> DataDict a b c d -> a
-getButton k dd = getEntry (ButtonKey k) (buttonDict dd)
-
--- |Get a text from the data dictionary
-getText :: Text -> DataDict a b c d -> b
-getText k dd = getEntry (TextKey k) (textDict dd)
-
--- |Get a control from the data dictionary
-getControl :: Control -> DataDict a b c d -> c
-getControl k dd = getEntry (ControlKey k) (controlDict dd)
-
--- |Get a spin control from the data dictionary
-getSpin :: Spin -> DataDict a b c d -> d
-getSpin k dd = getEntry (SpinKey k) (spinDict dd)
-
+data SpinLabel = IterationSpin deriving (Eq,Show,Ord)
 

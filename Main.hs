@@ -18,7 +18,7 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
     Nigel Stepp <stepp@atistar.net>
-	http://www.atistar.net/~stepp/contactxfer/
+	http://www.atistar.net/~stepp/ingraph/
 
     $Id: Main.hs 861 2014-08-18 17:34:13Z stepp $
 -}
@@ -31,7 +31,8 @@ import Paths_ingraph
 import DataDict
 import Data.List
 import Data.Maybe
-import Data.Graph.Inductive
+import qualified Data.Map as Map
+import Data.Graph.Inductive hiding (size)
 import System.FilePath
 import System.Directory
 import System.Environment
@@ -41,7 +42,7 @@ import Control.Monad
 import Control.Exception
 
 
-version = "0.10"
+version = "0.11"
 
 
 aboutTxt =
@@ -153,6 +154,7 @@ doFrame
          optMode <- choice p [ items := optModes, selection := 0 ]
 
          -- Store items in a data dictionary
+         {-
          let dataDict = DataDict {
                 buttonDict = Dict [(ButtonKey OptButton, optButton),
                                    (ButtonKey ResetButton, resetButton)],
@@ -164,12 +166,27 @@ doFrame
                 controlDict = Dict [(ControlKey GainSlider, gainSlider)],
                 spinDict = Dict [(SpinKey IterationSpin, optIterations)]
                 }
+         -}
 
-         set w [ on click := addPortal f w varPortalGraph dataDict,
-                 on paint := onPaint varPortalMap varPortalGraph dataDict ]
+         let widgets = WidgetConfig {
+            cfgButtons = Map.fromList [
+                (OptButton,optButton),
+                (ResetButton,resetButton) ],
+            cfgText = Map.fromList [
+                (EAPText, eapText),
+                (FAPText, fapText),
+                (RatioText, ratioText),
+                (FieldText, fieldText),
+                (LinkText, linkText) ],
+            cfgSliders = Map.fromList [(GainSlider, gainSlider)],
+            cfgSpinners = Map.fromList [(IterationSpin, optIterations)]
+            }
 
-         set optButton [ on command := optimizeLinks w varPortalGraph varOptFunc varOptMode dataDict ]
-         set resetButton [ on command := clearGraph w varPortalGraph dataDict ]
+         set w [ on click := addPortal f w varPortalGraph widgets,
+                 on paint := onPaint varPortalMap varPortalGraph ]
+
+         set optButton [ on command := optimizeLinks w varPortalGraph varOptFunc varOptMode widgets ]
+         set resetButton [ on command := clearGraph w varPortalGraph widgets ]
 
          set optFunc [ on select ::= updateOptFunc varOptFunc ]
          set optMode [ on select ::= updateOptMode varOptMode ]
@@ -202,7 +219,7 @@ doFrame
                  on (menu mQuit) := close f,
                  on (menu mOpen) := onOpen f w varPortalMap varPortalGraph mClose status,
                  --on (menu mSave) := savePortalImage varPortalMap varPortalGraph,
-                 on (menu mLoad) := loadPortalGraph f w varPortalGraph dataDict,
+                 on (menu mLoad) := loadPortalGraph f w varPortalGraph widgets,
                  on (menu mSave) := savePortalGraph f varPortalGraph,
                  on (menu mClose) := onClose w varPortalMap mClose status,
                  on (menu mRank) := showRankings varPortalGraph,
@@ -231,8 +248,8 @@ openImage w varPortalMap mClose status file
          repaint w
       `onException` repaint w
 
-onPaint :: Var (Maybe (Bitmap ())) -> Var PortalGraph -> DataDict a b c d -> DC e -> Rect -> IO ()
-onPaint varPortalMap varPortalGraph dataDict dc viewArea
+onPaint :: Var (Maybe (Bitmap ())) -> Var PortalGraph -> DC e -> Rect -> IO ()
+onPaint varPortalMap varPortalGraph dc viewArea
     = do bmap <- get varPortalMap value
          case bmap of
             Nothing -> return ()
@@ -307,7 +324,7 @@ savePortalGraph f varPortalGraph
 -- See 'savePortalGraph' for comments about the file format. As it is now, this routine
 -- expects the pos attribute to be a tuple \"(x,y)\" instead of the usual \"x,y!\" from the
 -- dot-file specification. This should be remedied in future versions.
-loadPortalGraph f w varPortalGraph dataDict
+loadPortalGraph f w varPortalGraph widgets
     = do
         graphFile <- fileOpenDialog f True True "Open graph" graphFiles "" ""
         case graphFile of
@@ -323,7 +340,7 @@ loadPortalGraph f w varPortalGraph dataDict
                     portals = zip nodeLabels nodeVecs
                     edges = map (\s->(read $ drop 1 $ head (words s)::Int, read $ drop 1 $ last (words s)::Int,())) edgeStrs
                     g = insEdges edges $ addPortals emptyGraph portals
-                    optButton = getButton OptButton dataDict
+                    optButton = getCfg widgets OptButton
                 set varPortalGraph [ value := g ]
                 set optButton [ enabled := True ]
                 repaint w
@@ -350,12 +367,12 @@ savePortalImage varPortalMap varPortalGraph
 
 -- |Given a click location, add a new portal to the graph.
 -- A modal dialog is presented so that the user can enter a label for the new portal.
-addPortal :: (Able c) => Frame a -> ScrolledWindow b -> Var PortalGraph -> DataDict c d e f -> Point -> IO ()
-addPortal f w varPortalGraph dataDict pt
+addPortal :: Frame a -> ScrolledWindow b -> Var PortalGraph -> WidgetConfig -> Point -> IO ()
+addPortal f w varPortalGraph widgets pt
     = do graph <- varGet varPortalGraph
          let defaultName = "portal" ++ (show $ noNodes graph)
          portalName <- textDialog f "Please enter a name for this portal" "Name" defaultName
-         let optButton = getButton OptButton dataDict
+         let optButton = getCfg widgets OptButton
          if (length portalName) > 0
              then do set optButton [ enabled := True ]
                      varUpdate varPortalGraph (\g -> addPortals g [(portalName,point2vec pt)] )
@@ -377,14 +394,14 @@ vec2point :: InGraph.Vector Float -> Point
 vec2point (Vec (x,y)) = Point (truncate x) (truncate y)
 
 -- |Reset the graph state to the empty graph and clear all stats.
-clearGraph w varPortalGraph dataDict
-    = do let optButton = getButton OptButton dataDict
+clearGraph w varPortalGraph widgets
+    = do let optButton = getCfg widgets OptButton
          varSet varPortalGraph emptyGraph
-         set (getText EAPText dataDict) [ text := "" ]
-         set (getText FAPText dataDict) [ text := "" ]
-         set (getText RatioText dataDict) [ text := "" ]
-         set (getText FieldText dataDict) [ text := "" ]
-         set (getText LinkText dataDict) [ text := "" ]
+         set (getCfg widgets EAPText) [ text := "" ]
+         set (getCfg widgets FAPText) [ text := "" ]
+         set (getCfg widgets RatioText) [ text := "" ]
+         set (getCfg widgets FieldText) [ text := "" ]
+         set (getCfg widgets LinkText) [ text := "" ]
          set optButton [ enabled := False ]
          repaint w
 
@@ -405,14 +422,14 @@ updateOptMode varOptMode selectedItem
 -- | Call "InGraph" optimization routine on the currently
 -- defined graph.
 -- The user selects which optimization function to use. See "InGraph#hamiltonians"
-optimizeLinks w varPortalGraph varOptFunc varOptMode dataDict
-    = do let gainSlider = getControl GainSlider dataDict
-             iterSpin = getSpin IterationSpin dataDict
-             eapText = getText EAPText dataDict
-             fapText = getText FAPText dataDict
-             ratioText = getText RatioText dataDict
-             fieldText = getText FieldText dataDict
-             linkText = getText LinkText dataDict
+optimizeLinks w varPortalGraph varOptFunc varOptMode widgets
+    = do let gainSlider = getCfg widgets GainSlider
+             iterSpin = getCfg widgets IterationSpin
+             eapText = getCfg widgets EAPText
+             fapText = getCfg widgets FAPText
+             ratioText = getCfg widgets RatioText
+             fieldText = getCfg widgets FieldText
+             linkText = getCfg widgets LinkText
          fieldGain <- get gainSlider selection
          optIterations <- get iterSpin selection
          optMode <- varGet varOptMode
