@@ -18,7 +18,7 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
     Nigel Stepp <stepp@atistar.net>
-	http://www.atistar.net/~stepp/contactxfer/
+	http://www.atistar.net/~stepp/ingraph/
 
     $Id: DataDict.hs 844 2013-06-28 22:55:53Z stepp $
 -}

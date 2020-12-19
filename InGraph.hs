@@ -18,7 +18,7 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
     Nigel Stepp <stepp@atistar.net>
-	http://www.atistar.net/~stepp/contactxfer/
+	http://www.atistar.net/~stepp/ingraph/
 
     $Id: InGraph.hs 861 2014-08-18 17:34:13Z stepp $
 -}
@@ -35,16 +35,18 @@ import System.Random
 import Data.Graph.Inductive
 import GHC.Float
 
+import Control.Monad.Random.Strict
+
 -- * Types
 
 data OptMode = LinkMode | FieldMode
-data Vector a = Vec (a,a) deriving (Eq)
+newtype Vector a = Vec (a,a) deriving (Eq)
 type Portal = (String,Vector Float)
 type PortalGraph = Gr Portal ()
 type Hamiltonian = Float -> PortalGraph -> Float
 
 instance Show a => Show (Vector a) where
-    show (Vec (x,y)) = "(" ++ (show x) ++ "," ++ (show y) ++ ")"
+    show (Vec (x,y)) = "(" ++ show x ++ "," ++ show y ++ ")"
 
 instance Functor Vector where
     fmap f (Vec (x,y)) = Vec (f x, f y)
@@ -54,25 +56,24 @@ instance Num a => Num (Vector a) where
     (+) (Vec (a1,a2)) (Vec (b1,b2)) = Vec (a1+b1, a2+b2)
     (-) (Vec (a1,a2)) (Vec (b1,b2)) = Vec (a1-b1, a2-b2)
     (*) (Vec (a1,a2)) (Vec (b1,b2)) = Vec (a1*b1, a2*b2)
-    negate (Vec (a1,a2)) = Vec (-a1,-a2)
-    abs (Vec (a1,a2)) = Vec (abs a1, abs a2)
-    signum (Vec (a1,a2)) = Vec (signum a1, signum a2)
+    negate = fmap negate
+    abs = fmap abs
+    signum = fmap signum
     fromInteger x = Vec (fromInteger x, fromInteger x)
 
 -- * Functions
 
 -- ** Graph handling routines
 
-emptyGraph = empty::PortalGraph
+emptyGraph = empty :: PortalGraph
 
 -- |Add a list of portals to a portal graph
 addPortals :: PortalGraph -> [Portal] -> PortalGraph
-addPortals g [] = g
-addPortals g (p:ps) = addPortals (insNode (newNode g, p) g) ps
+addPortals = foldl (\ g p -> insNode (newNode g, p) g)
 
 -- |Determine the id of the next node to add
 newNode :: PortalGraph -> Node
-newNode g = (newNodes 1 g)!!0
+newNode g = head (newNodes 1 g)
 
 -- |Remove all of the edges from a graph
 stripEdges :: PortalGraph -> PortalGraph
@@ -137,7 +138,7 @@ adjFields :: PortalGraph   -- ^ Graph to analyze
           -> [(Node,Node)] -- ^ A list containing pairs of vertices that
                            -- make a trianlge with the given reference vertex
 adjFields g p = let links = suc (undir g) p
-                    endpoints = map (intersect links) (map (suc g) links)
+                    endpoints = map (intersect links . suc g) links
                     endpairs = map (\a -> zip (repeat (fst a)) (snd a) ) (zip links endpoints)
                 in concat endpairs
 
@@ -148,7 +149,7 @@ adjFields g p = let links = suc (undir g) p
 getFields :: PortalGraph -> [[Node]]
 getFields g =
     let allAdjFields = map (adjFields g) (nodes g)
-        fieldVerts = zipWith (\a b -> map (\c-> [a, (fst c), (snd c)]) b)  (nodes g) allAdjFields
+        fieldVerts = zipWith (\a b -> map (\c-> [a, fst c, snd c]) b)  (nodes g) allAdjFields
         uniqueFields = nub $ map Set.fromList $ concat fieldVerts
     in map Set.toList uniqueFields
 
@@ -161,11 +162,11 @@ isCoveredBy :: PortalGraph
             -> Node        -- ^ The portal node id
             -> [Node]      -- ^ Three element list of field vertices
             -> Bool
-isCoveredBy g portal field = 
+isCoveredBy g portal field =
     let p = portalVec g portal
         fieldVecs = map (\x -> portalVec g x - p) field
         vecAngles = zipWith vecAngle fieldVecs (tail $ cycle fieldVecs)
-    in (abs $ (sum vecAngles) - (2*pi)) < 1e-6
+    in abs ((sum vecAngles) - (2*pi)) < 1e-6
 
 -- |Determine whether a portal is covered by any field
 isCovered :: PortalGraph
@@ -173,7 +174,7 @@ isCovered :: PortalGraph
           -> Bool
 isCovered g portal =
     let fields = getFields g
-    in or $ map (isCoveredBy g portal) fields
+    in any (isCoveredBy g portal) fields
 
 
 -- |Count how many fields are covering a portal
@@ -258,12 +259,12 @@ hamiltonianLinks gain g =
 
 
 hamiltonianKeys :: Float -> PortalGraph -> Float
-hamiltonianKeys gain g = 
+hamiltonianKeys gain g =
     let avgIn = mean $ map (indeg g) (nodes g)
         degree = map (deg g) (nodes g)
         deg1 = length $ filter (<2) degree
         deg0 = length $ filter (<1) degree
-    in -((fromIntegral $ 500*deg1 + 1000*deg0) + avgIn)
+    in -(fromIntegral (500*deg1 + 1000*deg0) + avgIn)
 
 hamiltonianMaxCover :: Float -> PortalGraph -> Float
 hamiltonianMaxCover gain g =
@@ -289,7 +290,7 @@ hamiltonianLinkDefense :: Float -> PortalGraph -> Float
 --hamiltonianLinkDefense gain g = sum $ map (\n-> exp (8.0-(fromIntegral $ deg g n))) (nodes g)
 hamiltonianLinkDefense gain g = -linkDefense
     where
-        linkDefense = (sum $ map (\n -> 4.0/9.0 * atan ((fromIntegral $ deg g n)/(exp 1))) (nodes g))
+        linkDefense = sum $ map (\n -> 4.0/9.0 * atan (fromIntegral (deg g n)/(exp 1))) (nodes g)
 
 -- |Hamiltonian for maximizing AP due to creating links and fields
 hamiltonianAP :: Float -> PortalGraph -> Float
@@ -301,12 +302,12 @@ hamiltonianAP gain g =
 -- |Hamiltonian for minimizing the ratio of AP to destroy to AP to create.
 hamiltonianRatio :: Float -> PortalGraph -> Float
 hamiltonianRatio gain g = let energies = map (portalEnergy gain g) (nodes g)
-                in (sum energies)
+                in sum energies
 
 -- |Hamiltonian for maximizing the score at the UCLA Warp Break event
 hamiltonianUCLA :: Float -> PortalGraph -> Float
 hamiltonianUCLA gain g =
-    let 
+    let
         portals = noNodes g
         coverings = countCoverings g 1
         score = portals + 4 + (coverings * 25)
@@ -331,72 +332,76 @@ portalEnergy fieldGain g p =
         friendlyAP = fromIntegral (313*links + 1250*numFields)
     in if links < 1
           then 1e6
-          else enemyAP / friendlyAP / (1-fieldGain+fieldGain*(tanh $ fromIntegral (1+numFields)))
+          else enemyAP / friendlyAP / (1 - fieldGain + fieldGain * tanh (fromIntegral (1+numFields)))
 
 -- *** Optimizers
 
 -- |Implement a simple metropolis algorithm for minimizing
 -- the hamiltonian of a portal graph
-metropolisWith :: Hamiltonian -- ^ Hamliltonian function
-           -> StdGen      -- ^ Random number generator
-           -> PortalGraph -- ^ Graph to optimize
-           -> Float       -- ^ Importance of making fields, 0 to 1
-           -> Int         -- ^ Maximum number of iterations
-           -> PortalGraph -- ^ Returns the optimized graph
-metropolisWith h randgen g gain 0 = g
-metropolisWith h randgen g gain n =
-    let (newRandgen,temp) = perturbGraph (randgen,g)
-    in if (h gain temp) < (h gain g)
-          then metropolisWith h newRandgen temp gain (n-1)
-          else metropolisWith h newRandgen g gain (n-1)
+metropolisWith :: MonadRandom m =>
+            Hamiltonian -- ^ Hamliltonian function
+            -> PortalGraph -- ^ Graph to optimize
+            -> Float       -- ^ Importance of making fields, 0 to 1
+            -> Int         -- ^ Maximum number of iterations
+            -> m PortalGraph -- ^ Returns the optimized graph
+metropolisWith h g gain 0 = do
+    return g
+metropolisWith h g gain n = do
+    temp <- perturbGraph g
+    if (h gain temp) < (h gain g)
+        then metropolisWith h temp gain (n-1)
+        else metropolisWith h g gain (n-1)
 --    where
 --        iteraten f x 0 = x
 --        iteraten f x n = iteraten f (f x) (n-1)
 
 -- |Implement a simple metropolis algorithm for minimizing
 -- the hamiltonian of a portal graph
-fieldMetropolisWith :: Hamiltonian -- ^ Hamliltonian function
-           -> StdGen      -- ^ Random number generator
-           -> PortalGraph -- ^ Graph to optimize
-           -> Float       -- ^ Importance of making fields, 0 to 1
-           -> Int         -- ^ Maximum number of iterations
-           -> [[Node]]     -- ^ List of fields
-           -> PortalGraph -- ^ Returns the optimized graph
-fieldMetropolisWith h randgen g gain 0 fields = graphFromFields g $ filter (isCoveredBy g 1) (getFields g)
-fieldMetropolisWith h randgen g gain n fields =
-    let minimalGraph = graphFromFields g $ filter (isCoveredBy g 1) (getFields g)
-        (newRandgen,temp,newFields) = perturbGraphFields (randgen,minimalGraph,fields) 
-    in if (h gain temp) < (h gain minimalGraph)
-          then fieldMetropolisWith h newRandgen temp gain (n-1) newFields
-          else fieldMetropolisWith h newRandgen minimalGraph gain (n-1) newFields
+fieldMetropolisWith :: MonadRandom m =>
+            Hamiltonian -- ^ Hamliltonian function
+            -> PortalGraph -- ^ Graph to optimize
+            -> Float       -- ^ Importance of making fields, 0 to 1
+            -> Int         -- ^ Maximum number of iterations
+            -> [[Node]]     -- ^ List of fields
+            -> m PortalGraph -- ^ Returns the optimized graph
+fieldMetropolisWith h g gain 0 fields = do
+    return $ graphFromFields g fields
+fieldMetropolisWith h g gain n fields =
+    do
+        let minimalGraph = graphFromFields g fields
+        (temp,newFields) <- perturbGraphFields (minimalGraph,fields)
+        let newGraph = if (h gain temp) < (h gain minimalGraph)
+                        then temp
+                        else minimalGraph
+        fieldMetropolisWith h newGraph gain (n-1) newFields
 
 -- |Generate a random field
-randomField :: PortalGraph -> StdGen -> [Node]
-randomField g randgen =
-    pickPortals g randgen []
+randomField :: MonadRandom m => PortalGraph -> m [Node]
+randomField g =
+    pickPortals g []
     where
-        pickPortals g randgen fields =
-            if (length fields) < 3
-            then let (newPortal, randgen2) = randomR (0, (noNodes g)-1) randgen
-                 in pickPortals g randgen2 (nub (newPortal : fields))
-            else fields
+        pickPortals :: MonadRandom m => PortalGraph -> [Node] -> m [Node]
+        pickPortals g portals =
+            if length portals >= 3
+            then return portals
+            else do newPortal <- getRandomR (0, (noNodes g)-1)
+                    pickPortals g (nub (newPortal : portals))
 
 -- |Create a random modification to a graph, at the level of fielids
 -- Pick 3 random nodes
 -- If legal, add it to a list of fields in the graph.
 -- If illegal, remove a field and repeat
-perturbGraphFields (randgen,g,fields) =
-    let (p1, randgen2) = randomR (0, (noNodes g) - 1) randgen
-        (p2, randgen3) = randomR (0, (noNodes g) - 1) randgen2
-        (p3, randgen4) = randomR (0, (noNodes g) - 1) randgen3
-        newField = randomField g randgen
-        fieldLinks = [ (x,y) | x <- newField, y <- newField, x < y ]
-    in if ((length fields) > 0) && (or $ map (makesCross g) fieldLinks)
-       then let (f, randgen5) = randomR (0, (length fields)-1) randgen4
-                newFields = delete (fields!!(f-1)) fields
-            in perturbGraphFields (randgen5, graphFromFields g newFields, newFields)
-       else let newFields = newField : fields
-            in (randgen4, graphFromFields g newFields, newFields)
+perturbGraphFields :: MonadRandom m => (PortalGraph, [[Node]]) -> m (PortalGraph, [[Node]])
+perturbGraphFields (g,fields) = do
+    newField <- randomField g
+    let fieldLinks = [ (x,y) | x <- newField, y <- newField, x < y ]
+
+    if not (null fields) && any (makesCross g) fieldLinks
+        then do f <- getRandomR (0, (length fields)-1)
+                let newFields = delete (fields!!f) fields
+                perturbGraphFields (graphFromFields g newFields, newFields)
+        else let newFields = newField : fields
+             in return (graphFromFields g newFields, newFields)
 
 graphFromFields :: PortalGraph -> [[Node]] -> PortalGraph
 graphFromFields g fields =
@@ -404,7 +409,7 @@ graphFromFields g fields =
     where
         addFields g [] = g
         addFields g (f:fs) =
-            let fieldEdges = filter (\e -> not $ elem e (labEdges g))
+            let fieldEdges = filter (\e -> e `notElem` labEdges g)
                                     [ (x,y,()) | x <- f, y <- f, x < y ]
             in addFields (insEdges fieldEdges g) fs
 
@@ -413,41 +418,41 @@ graphFromFields g fields =
 -- Pick a link to toggle on or off.
 -- Continue toggling links until one of the toggles adds a link.
 -- This is because the hamiltonian will nearly always judge removal of a link as a higher energy state.
-perturbGraph :: (StdGen, PortalGraph) -> (StdGen, PortalGraph)
-perturbGraph (randgen,g) = 
+perturbGraph :: MonadRandom m => PortalGraph -> m PortalGraph
+perturbGraph g = do
     -- Select two random nodes for a link
-    let (randLinkFrom,randgen2) =  randomR (0, (noNodes g)-1) randgen
-        (randLinkTo,randgen3) =  randomR (0, (noNodes g)-1) randgen2
+    randLinkFrom <- getRandomR (0, (noNodes g)-1)
+    randLinkTo <- getRandomR (0, (noNodes g)-1)
     --- If it's a self-link, try again
-    in if randLinkFrom == randLinkTo
-       then if (length $ nodes g) < 2
-            then (randgen3,g)
-            else perturbGraph (randgen3,g)
-       else 
+    if randLinkFrom == randLinkTo
+       then if length (nodes g) < 2
+            then return g
+            else perturbGraph g
+       else
           --Toggle links until a toggle adds a link
-          if (randLinkFrom,randLinkTo) `elem` (edges g)
-             then perturbGraph (randgen3,(delEdge (randLinkFrom,randLinkTo) g))
-             else if (randLinkTo,randLinkFrom) `elem` (edges g)
-                  then perturbGraph (randgen3, (delEdge (randLinkTo,randLinkFrom) g))
+          if (randLinkFrom,randLinkTo) `elem` edges g
+             then perturbGraph (delEdge (randLinkFrom,randLinkTo) g)
+             else if (randLinkTo,randLinkFrom) `elem` edges g
+                  then perturbGraph (delEdge (randLinkTo,randLinkFrom) g)
                   else if makesCross g (randLinkFrom,randLinkTo)
-                       then perturbGraph (randgen3,g)
-                       else (randgen3, insEdge (randLinkFrom,randLinkTo,()) g)
- 
+                       then perturbGraph g
+                       else return $ insEdge (randLinkFrom,randLinkTo,()) g
+
 -- |Optimize the links among a collection of nodes.
-graphOptimizeWith :: Hamiltonian -- ^ Hamiltonian function
+graphOptimizeWith :: MonadRandom m =>
+              Hamiltonian -- ^ Hamiltonian function
               -> Float       -- ^ fieldGain: Importance of making fields, from 0 to 1
               -> Int         -- ^ maxIter: Maximum optimzation iterations
               -> OptMode     -- ^ optMode: Optimization mode
               -> PortalGraph -- ^ portalGraph: Graph to optimize
-              -> PortalGraph -- ^ Returns optimized graph
+              -> m PortalGraph -- ^ Returns optimized graph
 graphOptimizeWith h gain maxiter optMode portalGraph =
     case optMode of
-        LinkMode -> metropolisWith h (mkStdGen 1) portalGraph gain maxiter
-        FieldMode -> fieldMetropolisWith h (mkStdGen 1) portalGraph gain maxiter []
+        LinkMode -> metropolisWith h portalGraph gain maxiter
+        FieldMode -> fieldMetropolisWith h portalGraph gain maxiter []
 
 
 -- ** Graph measures
-
 
 -- |Count the total number of links in a graph
 countLinks :: PortalGraph -> Int
@@ -471,7 +476,7 @@ rankPortalNodes g =
         apsIdx = zip aps (nodes g)
     in map snd $ reverse $ sort apsIdx
 
-    
+
 
 -- |Calculate some descriptive numbers summarizing a graph.
 -- Return a tuple of (Enemy AP, Friendly AP, Number of Fields)
@@ -484,7 +489,7 @@ graphStats g =
         enemyAP = 187*links + 750*numFields
         friendlyAP = 313*links + 1250*numFields
     in (enemyAP,friendlyAP,numFields,links)
-     
+
 
 -- * Misc
 

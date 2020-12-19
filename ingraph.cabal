@@ -7,6 +7,8 @@ License-file:        LICENSE
 Author:              Nigel Stepp
 Maintainer:          stepp@atistar.net
 Copyright:           2013 Nigel Stepp
+Homepage:            https://github.com/nstepp/ingraph
+bug-reports:         https://github.com/nstepp/ingraph/issues
 
 Category:            Game
 Build-type:          Simple
@@ -21,7 +23,8 @@ Cabal-version:       >=1.6
 Executable ingraph
   Main-is:           Main.hs
   Build-Depends:     base, fgl, wx, random, wxcore, 
-                     containers, filepath, directory
+                     containers, filepath, directory,
+					 MonadRandom
   Other-modules:     InGraph DataDict Paths_ingraph
 
   if os(windows)

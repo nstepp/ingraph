@@ -39,6 +39,7 @@ import System.Environment
 import Graphics.UI.WX
 import Graphics.UI.WXCore
 import Control.Monad
+import Control.Monad.Random.Strict
 import Control.Exception
 
 
@@ -90,7 +91,7 @@ doFrame
 
          -- Check for the application icon
          iconPath <- getIconPath
-         
+
          -- Set the icon if it exists, otherwise
          -- don't bother the user about it
          case iconPath of
@@ -309,13 +310,13 @@ savePortalGraph f varPortalGraph
     = do
         g <- get varPortalGraph value
         graphFile <- fileSaveDialog f True True "Save graph" graphFiles "" ""
-        let nodeStr = concatMap (\n->"N" ++ (show n)
+        let nodeStr = concatMap (\n->"N" ++ show n
                 ++ "[label=\"" ++ (fst $ fromJust $ lab g n)
                 ++ "\", pos=\"("
                 ++ (tail.init) (show $ snd $ fromJust $ lab g n)
                 ++ ")\"]\n") (nodes g)
-            edgeStr = concatMap (\(f,t)->"N" ++ (show f)
-                ++ " -> N" ++ (show t) ++ "\n") (edges g)
+            edgeStr = concatMap (\(f,t)->"N" ++ show f
+                ++ " -> N" ++ show t ++ "\n") (edges g)
         case graphFile of
             Nothing -> return ()
             Just file -> writeFile file ("digraph PortalLinks {\n" ++ nodeStr ++ edgeStr ++ "}\n")
@@ -331,9 +332,9 @@ loadPortalGraph f w varPortalGraph widgets
             Nothing -> return ()
             Just file -> do
                 dotStrs <- (liftM lines) $ readFile file
-                let nodeStrs = filter (\s->isJust $ findIndex (=='[') s) dotStrs
+                let nodeStrs = filter (isJust . elemIndex '[') dotStrs
                     edgeStrs = filter (isInfixOf "->") dotStrs
-                    tempStrs = map (\s->map (\n->drop (n+2) s) (findIndices (=='=') s)) nodeStrs
+                    tempStrs = map (\s->map (\n->drop (n+2) s) (elemIndices '=' s)) nodeStrs
                     labels = transpose $ map (map (\s->take (fromJust$findIndex (=='"') s) s)) tempStrs
                     nodeLabels = head labels
                     nodeVecs = map (Vec . read) (last labels)::[InGraph.Vector Float]
@@ -351,7 +352,7 @@ loadPortalGraph f w varPortalGraph widgets
 savePortalImage varPortalMap varPortalGraph
     = do
         bmap <- get varPortalMap value
-        outBmap <- bitmapCreateEmpty (sz 400 400) (8)
+        outBmap <- bitmapCreateEmpty (sz 400 400) 8
         dc <- memoryDCCreate
         memoryDCSelectObject dc outBmap
         case bmap of
@@ -370,10 +371,10 @@ savePortalImage varPortalMap varPortalGraph
 addPortal :: Frame a -> ScrolledWindow b -> Var PortalGraph -> WidgetConfig -> Point -> IO ()
 addPortal f w varPortalGraph widgets pt
     = do graph <- varGet varPortalGraph
-         let defaultName = "portal" ++ (show $ noNodes graph)
+         let defaultName = "portal" ++ show (noNodes graph)
          portalName <- textDialog f "Please enter a name for this portal" "Name" defaultName
          let optButton = getCfg widgets OptButton
-         if (length portalName) > 0
+         if not (null portalName)
              then do set optButton [ enabled := True ]
                      varUpdate varPortalGraph (\g -> addPortals g [(portalName,point2vec pt)] )
              else varGet varPortalGraph
@@ -382,7 +383,7 @@ addPortal f w varPortalGraph widgets pt
 -- |Utility function to map a function to both elements
 -- of a tuple
 mapTuple :: (a -> b) -> ( (a,a) -> (b,b) )
-mapTuple f = ( f >< f )
+mapTuple f = f >< f
 
 -- |Convert a wxHaskell Point to a Vector used by the
 -- graph routines
@@ -445,14 +446,15 @@ optimizeLinks w varPortalGraph varOptFunc varOptMode widgets
                       7 -> hamiltonianKeys
                       --3 -> hamiltonianUCLA
          varUpdate varPortalGraph stripEdges
-         varUpdate varPortalGraph (graphOptimizeWith h ((fromIntegral fieldGain)/100.0) optIterations optMode)
-         optimizedGraph <- varGet varPortalGraph
+         oldGraph <- varGet varPortalGraph
+         let optimizedGraph = (`evalRand` mkStdGen 1) $ graphOptimizeWith h ((fromIntegral fieldGain)/100.0) optIterations optMode oldGraph
+         varSet varPortalGraph optimizedGraph
          let (eap,fap,fields,links) = graphStats optimizedGraph
-         set eapText [ text := (show eap) ]
-         set fapText [ text := (show fap) ]
-         set fieldText [ text := (show fields) ]
-         set linkText [ text := (show links) ]
-         set ratioText [ text := (show ((fromIntegral eap)/(fromIntegral fap))) ]
+         set eapText [ text := show eap ]
+         set fapText [ text := show fap ]
+         set fieldText [ text := show fields ]
+         set linkText [ text := show links ]
+         set ratioText [ text := show ((fromIntegral eap)/(fromIntegral fap)) ]
          repaint w
 
 -- |List portal links
@@ -467,10 +469,10 @@ showLinks varPortalGraph
              linkTos = map (map snd) (groupBy (\x y -> fst x == fst y) links)
              linkFroms = concatMap (nub . map fst) (groupBy (\x y -> fst x == fst y) links)
              fromStrs = map (\n->(fst$fromJust$lab graph n) ++ " (" ++ (show (deg graph n)) ++ " keys max) -> ") linkFroms
-             toStrs = map (\ns -> intercalate ",\n\t" (map (\n->fst$fromJust$lab graph n) ns)) linkTos
+             toStrs = map (intercalate ",\n\t" . map (\n->fst$fromJust$lab graph n)) linkTos
              --linkStrs = map (\(f,t)->(fst $ fromJust $ lab graph f) ++ " -> " ++ (fst $ fromJust $ lab graph t)) (edges (undir graph))
              linkStrs = zipWith (++) fromStrs toStrs
-        
+
          set linkList [ text := intercalate "\n" linkStrs ]
 
          set f [ layout := container p $ margin 10 $ column 5 [
