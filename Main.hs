@@ -1,5 +1,5 @@
 {-
-	InGraph - Ingress link optimizer
+    InGraph - Ingress link optimizer
 
     Copyright (C) 2013  Nigel D. Stepp
 
@@ -18,7 +18,7 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
     Nigel Stepp <stepp@atistar.net>
-	http://www.atistar.net/~stepp/ingraph/
+    http://www.atistar.net/~stepp/ingraph/
 
     $Id: Main.hs 861 2014-08-18 17:34:13Z stepp $
 -}

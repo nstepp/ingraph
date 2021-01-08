@@ -1,5 +1,5 @@
 {-
-	InGraph - Ingress link optimizer
+    InGraph - Ingress link optimizer
 
     Copyright (C) 2013  Nigel D. Stepp
 
@@ -18,7 +18,7 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
     Nigel Stepp <stepp@atistar.net>
-	http://www.atistar.net/~stepp/ingraph/
+    http://www.atistar.net/~stepp/ingraph/
 
     $Id: InGraph.hs 861 2014-08-18 17:34:13Z stepp $
 -}
@@ -366,14 +366,13 @@ fieldMetropolisWith :: MonadRandom m =>
             -> m PortalGraph -- ^ Returns the optimized graph
 fieldMetropolisWith h g gain 0 fields = do
     return $ graphFromFields g fields
-fieldMetropolisWith h g gain n fields =
-    do
-        let minimalGraph = graphFromFields g fields
-        (temp,newFields) <- perturbGraphFields (minimalGraph,fields)
-        let newGraph = if (h gain temp) < (h gain minimalGraph)
-                        then temp
-                        else minimalGraph
-        fieldMetropolisWith h newGraph gain (n-1) newFields
+fieldMetropolisWith h g gain n fields = do
+    let minimalGraph = graphFromFields g fields
+    (temp,newFields) <- perturbGraphFields (minimalGraph,fields)
+    let newGraph = if (h gain temp) < (h gain minimalGraph)
+                    then temp
+                    else minimalGraph
+    fieldMetropolisWith h newGraph gain (n-1) newFields
 
 -- |Generate a random field
 randomField :: MonadRandom m => PortalGraph -> m [Node]
